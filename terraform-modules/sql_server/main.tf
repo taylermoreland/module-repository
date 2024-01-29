@@ -14,7 +14,7 @@ resource "random_password" "srvName" {
   upper   = false
 }
 
-resource "azurerm_mssql_server" "srv" {
+resource "azurerm_mssql_server" "mssql" {
   name                                 = "${var.prefix}${var.env_set}-azsql-${var.project}-${random_password.srvName.result}"
   resource_group_name                  = azurerm_resource_group.rg.name
   location                             = azurerm_resource_group.rg.location
@@ -23,21 +23,23 @@ resource "azurerm_mssql_server" "srv" {
   administrator_login_password         = random_password.sqlpwd.result
   minimum_tls_version                  = "1.2"
   outbound_network_restriction_enabled = true
+  azuread_administrator {
+    login_username = var.active_directory_administrator_login_username
+    object_id      = var.active_directory_administrator_object_id
+    tenant_id      = var.active_directory_administrator_tenant_id
+  }
+
   identity {
     type = "SystemAssigned"
   }
-  azuread_administrator {
-    login_username = var.sql_aad_user
-    object_id      = var.sql_aad_id
+
+  lifecycle {
+    ignore_changes = [
+      tags
+    ]
   }
-
-  tags = var.tags
-
-  depends_on = [
-    random_password.sqlpwd
-  ]
-
 }
+
 
 resource "azurerm_key_vault_secret" "sqlsecret" {
   name         = "she-sql-server-admin-password"
@@ -48,7 +50,6 @@ resource "azurerm_key_vault_secret" "sqlsecret" {
     azurerm_key_vault.kv
   ]
 }
-
 
 resource "azurerm_mssql_firewall_rule" "au" {
   name             = "AllowCitrixAu"
