@@ -23,12 +23,9 @@ resource "azurerm_mssql_server" "srv" {
   administrator_login_password         = random_password.sqlpwd.result
   minimum_tls_version                  = "1.2"
   outbound_network_restriction_enabled = true
-
-
   identity {
     type = "SystemAssigned"
   }
-
   azuread_administrator {
     login_username = var.sql_aad_user
     object_id      = var.sql_aad_id
