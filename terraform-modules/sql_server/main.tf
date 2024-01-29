@@ -1,17 +1,114 @@
-# sql_server/main.tf
-
-resource "azurerm_resource_group" "sql_rg" {
-  name     = var.resource_group_name
-  location = var.location
+resource "random_password" "sqlpwd" {
+  length           = 32
+  special          = true
+  override_special = "_%@"
+  depends_on = [
+    azurerm_key_vault.kv
+  ]
 }
 
-resource "azurerm_sql_server" "sql_server" {
-  name                         = var.sql_server_name
-  resource_group_name          = azurerm_resource_group.sql_rg.name
-  location                     = azurerm_resource_group.sql_rg.location
-  version                      = "12.0"
-  administrator_login          = var.admin_username
-  administrator_login_password = var.admin_password
+resource "random_password" "srvName" {
+  length  = 4
+  special = false
+  lower   = true
+  upper   = false
+}
+
+resource "azurerm_mssql_server" "srv" {
+  name                                 = "${var.prefix}${var.env_set}-azsql-${var.project}-${random_password.srvName.result}"
+  resource_group_name                  = azurerm_resource_group.rg.name
+  location                             = azurerm_resource_group.rg.location
+  version                              = "12.0"
+  administrator_login                  = "${var.prefix}${var.env_set}-azsql-admin"
+  administrator_login_password         = random_password.sqlpwd.result
+  minimum_tls_version                  = "1.2"
+  outbound_network_restriction_enabled = true
+
+
+  identity {
+    type = "SystemAssigned"
+  }
+
+  azuread_administrator {
+    login_username = var.sql_aad_user
+    object_id      = var.sql_aad_id
+  }
+
+  tags = var.tags
+
+  depends_on = [
+    random_password.sqlpwd
+  ]
+
+}
+
+resource "azurerm_key_vault_secret" "sqlsecret" {
+  name         = "she-sql-server-admin-password"
+  value        = random_password.sqlpwd.result
+  key_vault_id = azurerm_key_vault.kv.id
+
+  depends_on = [
+    azurerm_key_vault.kv
+  ]
+}
+
+
+resource "azurerm_mssql_firewall_rule" "au" {
+  name             = "AllowCitrixAu"
+  server_id        = azurerm_mssql_server.srv.id
+  start_ip_address = var.AUCitrixIP
+  end_ip_address   = var.AUCitrixIP
+}
+resource "azurerm_mssql_firewall_rule" "in" {
+  name             = "AllowCitrixIn"
+  server_id        = azurerm_mssql_server.srv.id
+  start_ip_address = var.INCitrixIP
+  end_ip_address   = var.INCitrixIP
+}
+resource "azurerm_mssql_firewall_rule" "nl" {
+  name             = "AllowCitrixNl"
+  server_id        = azurerm_mssql_server.srv.id
+  start_ip_address = var.NLCitrixIP
+  end_ip_address   = var.NLCitrixIP
+}
+resource "azurerm_mssql_firewall_rule" "us" {
+  name             = "AllowCitrixUs"
+  server_id        = azurerm_mssql_server.srv.id
+  start_ip_address = var.USCitrixIP
+  end_ip_address   = var.USCitrixIP
+}
+
+resource "azurerm_mssql_firewall_rule" "PowerBI_Source" {
+  name             = "PowerBI_Source"
+  server_id        = azurerm_mssql_server.srv.id
+  start_ip_address = var.PowerBI_Source
+  end_ip_address   = var.PowerBI_Source
 }
 
 # Additional SQL Server configurations can go here...
+
+resource "random_password" "kvName" {
+  length  = 4
+  special = false
+  lower   = true
+  upper   = false
+}
+
+resource "azurerm_key_vault" "kv" {
+  name                        = "${var.prefix}${var.env_set}-kv-${var.project}-${random_password.kvName.result}"
+  location                    = azurerm_resource_group.rg.location
+  resource_group_name         = azurerm_resource_group.rg.name
+  enabled_for_disk_encryption = true
+  tenant_id                   = data.azurerm_client_config.current.tenant_id
+  soft_delete_retention_days  = 7
+  purge_protection_enabled    = false
+  enable_rbac_authorization   = true
+  sku_name                    = "standard"
+  tags                        = var.tags
+
+  network_acls {
+    default_action = "Deny"
+    ip_rules       = [var.agentIP, var.agentIP2, var.AUCitrixIP, var.INCitrixIP, var.NLCitrixIP, var.USCitrixIP]
+    bypass         = "AzureServices"
+  }
+}
