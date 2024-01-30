@@ -1,18 +1,18 @@
-resource "random_password" "sqlpwd" {
-  length           = 32
-  special          = true
-  override_special = "_%@"
-  depends_on = [
-    azurerm_key_vault.kv
-  ]
-}
+# resource "random_password" "sqlpwd" {
+#   length           = 32
+#   special          = true
+#   override_special = "_%@"
+#   depends_on = [
+#     azurerm_key_vault.kv
+#   ]
+# }
 
-resource "random_password" "srvName" {
-  length  = 4
-  special = false
-  lower   = true
-  upper   = false
-}
+# resource "random_password" "srvName" {
+#   length  = 4
+#   special = false
+#   lower   = true
+#   upper   = false
+# }
 
 resource "azurerm_mssql_server" "mssql" {
   name                                 = "${var.prefix}${var.env_set}-azsql-${var.project}-${random_password.srvName.result}"
@@ -20,7 +20,7 @@ resource "azurerm_mssql_server" "mssql" {
   location                             = azurerm_resource_group.rg.location
   version                              = "12.0"
   administrator_login                  = "${var.prefix}${var.env_set}-azsql-admin"
-  administrator_login_password         = random_password.sqlpwd.result
+  administrator_login_password         = "password"
   minimum_tls_version                  = "1.2"
   outbound_network_restriction_enabled = true
   azuread_administrator {
